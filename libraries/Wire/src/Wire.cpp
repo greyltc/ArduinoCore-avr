@@ -42,7 +42,7 @@ uint8_t TwoWire::txBufferIndex = 0;
 uint8_t TwoWire::txBufferLength = 0;
 
 uint8_t TwoWire::transmitting = 0;
-void (*TwoWire::user_onRequest)(void);
+bool (*TwoWire::user_onRequest)(void);
 void (*TwoWire::user_onReceive)(int);
 
 // Constructors ////////////////////////////////////////////////////////////////
@@ -296,9 +296,8 @@ int TwoWire::peek(void)
   return value;
 }
 
-void TwoWire::flush(void)
-{
-  // XXX: to be implemented.
+void TwoWire::flush(void){
+  twi_txBufSend();
 }
 
 // behind the scenes function that is called when data is received
@@ -327,18 +326,27 @@ void TwoWire::onReceiveService(uint8_t* inBytes, int numBytes)
 }
 
 // behind the scenes function that is called when data is requested
-void TwoWire::onRequestService(void)
+// from the slave
+bool TwoWire::onRequestService(void)
 {
   // don't bother if user hasn't registered a callback
   if(!user_onRequest){
-    return;
+    return (false); // no clock stretching
   }
   // reset tx buffer iterator vars
   // !!! this will kill any pending pre-master sendTo() activity
   txBufferIndex = 0;
   txBufferLength = 0;
-  // alert user program
-  user_onRequest();
+  
+  // the function that the user registered with Wire.onRequest must return a bool
+  // false means the user has used Wire.write to load what they'd like
+  // the slave's reply to be and they're ready for it to be sent immediately.
+  // true means the user is not ready for the slave to reply right now
+  // and that they will later call Wire.write and then Wire.flush
+  // to do the transfer at some later time. this means the slave will
+  // stretch the clock signal by londing it low, thereby monopolizing
+  /  the bus until the user calls Wire.flush
+  return (user_onRequest()); // alert user program
 }
 
 // sets function called on slave write
@@ -348,7 +356,7 @@ void TwoWire::onReceive( void (*function)(int) )
 }
 
 // sets function called on slave read
-void TwoWire::onRequest( void (*function)(void) )
+void TwoWire::onRequest( bool (*function)(void) )
 {
   user_onRequest = function;
 }

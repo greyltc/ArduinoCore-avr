@@ -55,7 +55,9 @@ static volatile uint32_t twi_timeout_us = 0ul;
 static volatile bool twi_timed_out_flag = false;  // a timeout has been seen
 static volatile bool twi_do_reset_on_timeout = false;  // reset the TWI registers on timeout
 
-static void (*twi_onSlaveTransmit)(void);
+static volatile bool twi_sla_reply_later;  // true when the slave will do clock stretching
+
+static bool (*twi_onSlaveTransmit)(void);
 static void (*twi_onSlaveReceive)(uint8_t*, int);
 
 static uint8_t twi_masterBuffer[TWI_BUFFER_LENGTH];
@@ -379,7 +381,7 @@ void twi_attachSlaveRxEvent( void (*function)(uint8_t*, int) )
  * Input    function: callback function to use
  * Output   none
  */
-void twi_attachSlaveTxEvent( void (*function)(void) )
+void twi_attachSlaveTxEvent( bool (*function)(void) )
 {
   twi_onSlaveTransmit = function;
 }
@@ -496,6 +498,21 @@ bool twi_manageTimeoutFlag(bool clear_flag){
     twi_timed_out_flag = false;
   }
   return(flag);
+}
+
+/*
+ * Function twi_tx_buf_send
+ * Desc     send the next byte from twi_txBuffer
+ */
+void twi_txBufSend(void){
+  // copy data to output register
+  TWDR = twi_txBuffer[twi_txBufferIndex++];
+  // if there is more to send, ack, otherwise nack
+  if(twi_txBufferIndex < twi_txBufferLength){
+    twi_reply(1);
+  }else{
+    twi_reply(0);
+  }
 }
 
 ISR(TWI_vect)
@@ -627,23 +644,23 @@ ISR(TWI_vect)
       twi_txBufferLength = 0;
       // request for txBuffer to be filled and length to be set
       // note: user must call twi_transmit(bytes, length) to do this
-      twi_onSlaveTransmit();
+      twi_sla_reply_later = twi_onSlaveTransmit();
       // if they didn't change buffer & length, initialize it
       if(0 == twi_txBufferLength){
         twi_txBufferLength = 1;
         twi_txBuffer[0] = 0x00;
       }
+      if (twi_sla_reply_later == true){
+        // don't fall through to transmit the tx buffer if the user wants to do it later
+        // note that this will cause the slave to hold SCL low making the bus unusable
+        // until the user calls twi_tx_buf_send()
+        TWCR = _BV(TWEN); // diable TWI interrupts
+        break;
+      }
       __attribute__ ((fallthrough));		  
       // transmit first byte from buffer, fall
     case TW_ST_DATA_ACK: // byte sent, ack returned
-      // copy data to output register
-      TWDR = twi_txBuffer[twi_txBufferIndex++];
-      // if there is more to send, ack, otherwise nack
-      if(twi_txBufferIndex < twi_txBufferLength){
-        twi_reply(1);
-      }else{
-        twi_reply(0);
-      }
+      twi_txBufSend(); // send a byte from the transmit buffer
       break;
     case TW_ST_DATA_NACK: // received nack, we are done 
     case TW_ST_LAST_DATA: // received ack, but we are done already!
