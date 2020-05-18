@@ -505,6 +505,7 @@ bool twi_manageTimeoutFlag(bool clear_flag){
  * Desc     send the next byte from twi_txBuffer
  */
 void twi_txBufSend(void){
+  twi_sla_reply_later = false;
   // copy data to output register
   TWDR = twi_txBuffer[twi_txBufferIndex++];
   // if there is more to send, ack, otherwise nack
@@ -645,17 +646,18 @@ ISR(TWI_vect)
       // request for txBuffer to be filled and length to be set
       // note: user must call twi_transmit(bytes, length) to do this
       twi_sla_reply_later = twi_onSlaveTransmit();
-      // if they didn't change buffer & length, initialize it
-      if(0 == twi_txBufferLength){
-        twi_txBufferLength = 1;
-        twi_txBuffer[0] = 0x00;
-      }
       if (twi_sla_reply_later == true){
         // don't fall through to transmit the tx buffer if the user wants to do it later
         // note that this will cause the slave to hold SCL low making the bus unusable
         // until the user calls twi_tx_buf_send()
         TWCR = _BV(TWEN); // diable TWI interrupts
         break;
+      } else {
+        // if they didn't change buffer & length, initialize it
+        if(0 == twi_txBufferLength){
+          twi_txBufferLength = 1;
+          twi_txBuffer[0] = 0x00;
+        }
       }
       __attribute__ ((fallthrough));		  
       // transmit first byte from buffer, fall
