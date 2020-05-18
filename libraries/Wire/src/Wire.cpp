@@ -345,7 +345,7 @@ bool TwoWire::onRequestService(void)
   // and that they will later call Wire.write and then Wire.flush
   // to do the transfer at some later time. this means the slave will
   // stretch the clock signal by londing it low, thereby monopolizing
-  /  the bus until the user calls Wire.flush
+  //  the bus until the user calls Wire.flush
   return (user_onRequest()); // alert user program
 }
 
