@@ -159,7 +159,12 @@ void twi_setFrequency(uint32_t frequency)
 uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length, uint8_t sendStop)
 {
   uint8_t i;
-  uint32_t startMicros = 0;  // keeps track of start times for loops
+  uint32_t startMicros = 0;  // for timeouts. keeps track of when we started this function
+
+  // record t0 for the timeout
+  if (twi_timeout_us > 0ul) {
+    startMicros = micros();
+  }
 
   // ensure data will fit into buffer
   if(TWI_BUFFER_LENGTH < length){
@@ -167,9 +172,6 @@ uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length, uint8_t sen
   }
 
   // wait until twi is ready, become master receiver
-  if (twi_timeout_us > 0ul) {
-    startMicros = micros();
-  }
   while(TWI_READY != twi_state){
     if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
       twi_handleTimeout(twi_do_reset_on_timeout);
@@ -202,9 +204,6 @@ uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length, uint8_t sen
     // up. Also, don't enable the START interrupt. There may be one pending from the 
     // repeated start that we sent ourselves, and that would really confuse things.
     twi_inRepStart = false;			// remember, we're dealing with an ASYNC ISR
-    if (twi_timeout_us > 0ul) {
-      startMicros = micros();
-    }
     do {
       TWDR = twi_slarw;
       if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
@@ -219,9 +218,6 @@ uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length, uint8_t sen
   }
 
   // wait for read operation to complete
-  if (twi_timeout_us > 0ul) {
-    startMicros = micros();
-  }
   while(TWI_MRX == twi_state){
     if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
       twi_handleTimeout(twi_do_reset_on_timeout);
@@ -260,7 +256,12 @@ uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length, uint8_t sen
 uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait, uint8_t sendStop)
 {
   uint8_t i;
-  uint32_t startMicros = 0;  // keeps track of start times for loops
+  uint32_t startMicros = 0;  // for timeouts. keeps track of when we started this function
+
+  // record t0 for the timeout
+  if (twi_timeout_us > 0ul) {
+    startMicros = micros();
+  }
 
   // ensure data will fit into buffer
   if(TWI_BUFFER_LENGTH < length){
@@ -268,9 +269,6 @@ uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait
   }
 
   // wait until twi is ready, become master transmitter
-  if (twi_timeout_us > 0ul) {
-    startMicros = micros();
-  }
   while(TWI_READY != twi_state){
     if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
       twi_handleTimeout(twi_do_reset_on_timeout);
@@ -306,9 +304,6 @@ uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait
     // up. Also, don't enable the START interrupt. There may be one pending from the 
     // repeated start that we sent outselves, and that would really confuse things.
     twi_inRepStart = false;			// remember, we're dealing with an ASYNC ISR
-    if (twi_timeout_us > 0ul) {
-      startMicros = micros();
-    }
     do {
       TWDR = twi_slarw;
       if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
@@ -323,9 +318,6 @@ uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait
   }
 
   // wait for write operation to complete
-  if (twi_timeout_us > 0ul) {
-    startMicros = micros();
-  }
   while(wait && (TWI_MTX == twi_state)){
     if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
       twi_handleTimeout(twi_do_reset_on_timeout);
